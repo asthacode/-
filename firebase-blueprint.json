@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Information about travelers and guides",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["traveler", "guide"] },
+        "name": { "type": "string" },
+        "division": { "type": "string" },
+        "district": { "type": "string" },
+        "upazila": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "phone", "role"]
+    },
+    "GuideApplication": {
+      "title": "Guide Registration Application",
+      "description": "Identity verification data for new guides",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "division": { "type": "string" },
+        "district": { "type": "string" },
+        "upazila": { "type": "string" },
+        "nidFrontUrl": { "type": "string" },
+        "nidBackUrl": { "type": "string" },
+        "facePhotoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "phone", "nidFrontUrl", "nidBackUrl", "facePhotoUrl", "status"]
+    },
+    "Guide": {
+      "title": "Guide Profile",
+      "description": "Publicly visible guide information",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "photo": { "type": "string" },
+        "division": { "type": "string" },
+        "district": { "type": "string" },
+        "upazila": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviews": { "type": "number" },
+        "availableDates": { "type": "array" },
+        "villagePhotos": { "type": "array" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["userId", "name", "division", "district", "upazila", "price", "active"]
+    },
+    "Booking": {
+      "title": "Tour Booking",
+      "description": "Booking records between travelers and guides",
+      "type": "object",
+      "properties": {
+        "guideId": { "type": "string" },
+        "travelerId": { "type": "string" },
+        "date": { "type": "string" },
+        "price": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["guideId", "travelerId", "date", "price", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profile data"
+    },
+    "/applications/{applicationId}": {
+      "schema": "GuideApplication",
+      "description": "Stores guide registration applications"
+    },
+    "/guides/{guideId}": {
+      "schema": "Guide",
+      "description": "Stores active guide profiles"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Stores booking records"
+    }
+  }
+}

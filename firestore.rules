@@ -1,0 +1,130 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 0.1 Common Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Admin lookup - only if needed, bootstrap with current user email
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'sr5388940@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin(); // Only admins can list users
+      
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUser(incoming());
+      allow update: if isValidId(userId) && (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
+        // Action: Update Profile
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'division', 'district', 'upazila'])) ||
+        // Action: Admin suspension
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      );
+
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'phone', 'role', 'name', 'status', 'createdAt']) &&
+               data.uid == request.auth.uid &&
+               data.role in ['traveler', 'guide'] &&
+               data.status in ['active', 'suspended'] &&
+               data.phone is string && data.phone.size() >= 10 && data.phone.size() <= 15 &&
+               data.role.size() <= 20 &&
+               data.status.size() <= 20 &&
+               data.name is string && data.name.size() >= 2 && data.name.size() <= 100;
+      }
+    }
+
+    // 2. Guide Applications
+    match /applications/{applicationId} {
+      allow get: if isValidId(applicationId) && (isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()));
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isValidId(applicationId) && isVerifiedUser() && isValidApplication(incoming()) && 
+                    incoming().userId == request.auth.uid &&
+                    incoming().status == 'pending';
+      
+      allow update: if isValidId(applicationId) && isAdmin() && isValidApplication(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+
+      function isValidApplication(data) {
+        return data.keys().hasAll(['userId', 'name', 'phone', 'division', 'district', 'upazila', 'nidFrontUrl', 'nidBackUrl', 'facePhotoUrl', 'status', 'createdAt']) &&
+               data.userId == request.auth.uid &&
+               data.status in ['pending', 'approved', 'rejected'] &&
+               data.phone.size() <= 15 &&
+               data.nidFrontUrl is string && data.nidFrontUrl.size() <= 1024 &&
+               data.nidBackUrl is string && data.nidBackUrl.size() <= 1024 &&
+               data.facePhotoUrl is string && data.facePhotoUrl.size() <= 1024;
+      }
+    }
+
+    // 3. Guides Collection (Publicly Viewable Discovery)
+    match /guides/{guideId} {
+      allow get: if isValidId(guideId);
+      allow list: if true; // Public discovery allowed
+      allow create, update: if isValidId(guideId) && isAdmin() && isValidGuide(incoming());
+
+      function isValidGuide(data) {
+        return data.keys().hasAll(['userId', 'name', 'division', 'district', 'upazila', 'price', 'active']) &&
+               data.price is number && data.price > 0 &&
+               data.active is bool &&
+               data.name.size() <= 100;
+      }
+    }
+
+    // 4. Bookings Collection
+    match /bookings/{bookingId} {
+      allow get: if isValidId(bookingId) && isSignedIn() && (resource.data.travelerId == request.auth.uid || resource.data.guideId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.travelerId == request.auth.uid || resource.data.guideId == request.auth.uid || isAdmin());
+
+      allow create: if isValidId(bookingId) && isVerifiedUser() && isValidBooking(incoming()) && 
+                    incoming().travelerId == request.auth.uid &&
+                    incoming().status == 'pending';
+                    
+      allow update: if isValidId(bookingId) && isSignedIn() && isValidBooking(incoming()) && (
+        // Action: Guide Accept/Reject
+        (resource.data.guideId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status in ['accepted', 'cancelled']) ||
+        // Action: Traveler Cancel
+        (resource.data.travelerId == request.auth.uid && existing().status == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'cancelled')
+      );
+
+      function isValidBooking(data) {
+        return data.keys().hasAll(['guideId', 'travelerId', 'date', 'price', 'status', 'createdAt']) &&
+               data.status in ['pending', 'accepted', 'completed', 'cancelled'] &&
+               data.guideId.size() <= 128 &&
+               data.travelerId.size() <= 128 &&
+               data.price is number && data.price >= 0;
+      }
+    }
+  }
+}

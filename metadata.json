@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Nadekha Bangladesh",
+  "description": "A rural tourism platform connecting travelers with local village guides across Bangladesh. Explore hidden gems and book authentic rural experiences.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
